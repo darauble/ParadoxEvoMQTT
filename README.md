@@ -79,7 +79,16 @@ For the meaning of these value please consult the **PRT3 ASCII Programming Guide
 The listening topic is set to `darauble/paraevo/area/1/set`. The default values from Home Assistant are accepted:
 * ARM_AWAY - using Area Quick Arm
 * ARM_HOME - using Area Quick ARM
-* DISARM - support pending (it needs a user code)
+* DISARM - *support pending (it needs a user code)*
+
+The entry in `configuration.yaml` of Home Assistant is simple as following:
+```
+alarm_control_panel:
+  - platform: mqtt
+    state_topic: "darauble/paraevo/area/1"
+    command_topic: "darauble/paraevo/area/1/set"
+
+```
 
 ## Zone Topics
 Each zone has a topic `darauble/paraevo/area/1/zone/1`. If sensor is off, the reported payload is `off`. It is set to `on` if zone:
@@ -87,12 +96,22 @@ Each zone has a topic `darauble/paraevo/area/1/zone/1`. If sensor is off, the re
 * is tampered
 * is on fire loop trouble
 
-It is oversimplified, I know, but I wanted to keep this topic as a binary sensor for Home Assistant.
+It is oversimplified, I know, but I wanted to keep this topic as a *binary sensor* for Home Assistant.
 
 Also each zone has a topic for alarm reporting: `darauble/paraevo/area/1/zone/1/alarm`. Again, it is binary: `on`/`off`.
 
 And if that is not enough, there's a JSON topic `darauble/paraevo/area/1/zone/1/state`. It again contains the states from PRT3 directly:
-`{"num": 1,"area": 1,"name": "Living room","status": "C","alarm": "O","fire": "O","supervision": "O","battery": "O","bypassed": "O"}
+`{"num": 1,"area": 1,"name": "Living room","status": "C","alarm": "O","fire": "O","supervision": "O","battery": "O","bypassed": "O"}`
+
+A binary sensor showing the zone status can be configured as follows:
+```
+binary_sensor:
+  - platform: mqtt
+    name: "Living Room"
+    state_topic: "darauble/paraevo/area/1/zone/1/state"
+    payload_on: "on"
+    payload_off: "off"
+```
 
 **NOTE**: _bypassed_ flag is not yet supported in v0.3! TBD.
 
@@ -105,14 +124,28 @@ The topic is as follows: `darauble/paraevo/utilitykey`. As a payload, send the n
 
 So, let's say, that Utility Key 1 issues a command to PGM, which in turn opens or closes the garage gate. The zone 30 reports if the gate (a magnetic sensor on it) is open or closed. This could be translated to MQTT switch configuration in Home Assistant as follows:
 
-```- platform: mqtt
-  name: "Garage gate open/close"
-  state_topic: "darauble/paraevo/area/1/zone/30"
-  state_on: "on"
-  state_off: "off"
-  command_topic: "darauble/paraevo/utilitykey"
-  payload_on: "1"
-  payload_off: "1"
-- platform: mqtt```
+```
+switch
+  - platform: mqtt
+    name: "Garage gate open/close"
+    state_topic: "darauble/paraevo/area/1/zone/30"
+    state_on: "on"
+    state_off: "off"
+    command_topic: "darauble/paraevo/utilitykey"
+    payload_on: "1"
+    payload_off: "1"
+```
 
+## LWT Topic
+To track if Paradox EVO daemon is running, the following topic is published with either "offline" or "online" payloads: `darauble/paraevo/daemon`.
+
+To add a binary sensor to the Home Assistant configuration for alert automation:
+```
+binary_sensor:
+  - platform: mqtt
+    name: "ParaEVO"
+    state_topic: "darauble/paraevo/daemon"
+    payload_on: "online"
+    payload_off: "offline"
+```
 
