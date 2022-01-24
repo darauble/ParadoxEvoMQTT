@@ -1,0 +1,8 @@
+# BUILD = "RELEASE"
+BUILD = "DEBUG"
+CC = gcc
+
+## Add possible defines
+
+# Required with `-std=c99`
+T_DEFINES = -D_POSIX_C_SOURCE=199309L

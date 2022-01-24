@@ -1,0 +1,28 @@
+FROM ubuntu:21.10
+
+ENV TZ=Europe/Vilnius
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update
+
+RUN apt-get install -y \
+	apt-utils \
+	bash \
+	paho.mqtt.c libzmq5 \
+	python3 python3-yaml
+
+RUN apt-get install -y \
+	build-essential make gcc \
+	libpaho-mqtt-dev libzmq5-dev
+
+# Change to your user's ID and group ID!
+
+RUN groupadd -g 1000 darauble
+RUN useradd -d /home/darauble -s /bin/bash -m darauble -u 1000 -g 1000
+RUN usermod -a -G dialout darauble
+#RUN echo "darauble ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+USER darauble
+ENV HOME /home/darauble
+CMD /bin/bash
+

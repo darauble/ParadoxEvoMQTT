@@ -1,0 +1,19 @@
+FROM ubuntu:21.10
+
+ENV TZ=Europe/Vilnius
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update
+
+RUN apt-get install -y \
+	apt-utils \
+	bash \
+	paho.mqtt.c libzmq5 \
+	python3 python3-yaml
+
+RUN mkdir -p /opt/paraevo
+
+COPY start_daemon.py /opt/paraevo
+COPY paraevo /opt/paraevo
+
+ENTRYPOINT ["/opt/paraevo/start_daemon.py"]

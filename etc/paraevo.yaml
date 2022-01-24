@@ -1,0 +1,16 @@
+device: /dev/serial/by-id/usb-PARADOX_PARADOX_APR-PRT3_a4008936-if00-port0
+daemon: false
+verbose: true
+mqtt:
+  server: 192.168.0.100
+areas:
+  - num: 1
+    zones:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 10
