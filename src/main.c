@@ -4,7 +4,7 @@
  *
  * main.c
  *
- *  Created on: Jan 6, 2022
+ *  Created on: Oct 24, 2021
  *      Author: Darau, blė
  *
  *  This file is a part of personal use utilities developed to be used
