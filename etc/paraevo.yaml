@@ -3,6 +3,7 @@ daemon: false
 verbose: true
 mqtt:
   server: 192.168.0.100
+user_code: 123456
 areas:
   - num: 1
     zones:

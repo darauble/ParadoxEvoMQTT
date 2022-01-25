@@ -48,6 +48,9 @@ else:
     print("No area config!")
     exit(-1)
 
+if "user_code" in config and config["user_code"] != "":
+    args += " -u " + config["user_code"]
+
 print("The final command:")
 print(args)
 os.system(args)

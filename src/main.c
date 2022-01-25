@@ -29,9 +29,10 @@
  *       events 64 and 65 (a bit excess, but reliable).
  *       Added ARM_AWAY and ARM_HOME commands support via MQTT (No DISARM yet!)
  * v0.3: Adding utility key support, so these can be used as switches.
+ * v0.4: Adding control user code support, enabling Disarm.
  */
 #define V_MAJOR 0
-#define V_MINOR 3
+#define V_MINOR 4
 
 #include <stdio.h>
 #include <string.h>
@@ -56,6 +57,7 @@ para_evo_config_t config = {
     .mqtt_port = 1883,
     .mqtt_topic = "darauble/paraevo",
     .mqtt_client_id = "paraevo_daemon",
+    .user_code = NULL,
 };
 
 void *killpublisher = NULL;
@@ -89,6 +91,7 @@ int main(int argc, char **argv)
         {"zones",        required_argument, 0, 'z'},
         {"daemon",       no_argument,       0, 'D'},
         {"device",       required_argument, 0, 'd'},
+        {"user_code",    required_argument, 0, 'u'},
         {"help",         no_argument,       0, 'h'},
         {"verbose",      no_argument,       0, 'v'},
         {0, 0, 0, 0}
@@ -106,7 +109,7 @@ int main(int argc, char **argv)
     char *serialdevice = NULL;
 
     while(1) {
-        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:hv", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:hv", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -175,6 +178,10 @@ int main(int argc, char **argv)
 
             case 'd':
                 serialdevice = optarg;
+            break;
+
+            case 'u':
+                config.user_code = optarg;
             break;
 
             case 'D':

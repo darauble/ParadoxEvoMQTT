@@ -39,6 +39,8 @@ static void *para_mgr_thread(void *context);
 static void *para_mgr_initial_request_thread(void *serial_sender);
 static void para_request_area_status(void *serial_sender, int areanum);
 static void para_request_area_label(void *serial_sender, int areanum);
+static void para_area_arm(void *serial_sender, int areanum, char arm_type, char *user_code);
+static void para_area_disarm(void *serial_sender, int areanum, char *user_code);
 static void para_area_quick_arm(void *serial_sender, int areanum, char arm_type);
 static void para_request_zone_status(void *serial_sender, int zonenum);
 static void para_request_zone_label(void *serial_sender, int zonenum);
@@ -354,6 +356,24 @@ static void para_request_zone_label(void* serial_sender, int zonenum)
     para_send_request(serial_sender, req, 5);
 }
 
+static void para_area_arm(void *serial_sender, int areanum, char arm_type, char *user_code)
+{
+    log_debug("PMGR: arm area %d to %c\n", areanum, arm_type);
+    char req[13];
+    snprintf(req, 13, "AA%03d%c%s", areanum, arm_type, user_code);
+
+    para_send_request(serial_sender, req, 12);
+}
+
+static void para_area_disarm(void *serial_sender, int areanum, char *user_code)
+{
+    log_debug("PMGR: disarm area %d\n", areanum);
+    char req[12];
+    snprintf(req, 12, "AD%03d%s", areanum, user_code);
+
+    para_send_request(serial_sender, req, 11);
+}
+
 static void para_area_quick_arm(void *serial_sender, int areanum, char arm_type)
 {
     log_debug("PMGR: quick arm area %d to %c\n", areanum, arm_type);
@@ -615,15 +635,27 @@ static void para_process_command(void *mqtt_area_command, void *serial_sender)
         if (cmd->num > 0 && cmd->num <= MAX_AREAS && areas[cmd->num - 1] != NULL) {
             switch (cmd->command) {
                 case AC_ARM_AWAY:
-                    para_area_quick_arm(serial_sender, cmd->num, RS_AREA_ARMED);
+                    if (config.user_code == NULL) {
+                        para_area_quick_arm(serial_sender, cmd->num, RS_AREA_ARMED);
+                    } else {
+                        para_area_arm(serial_sender, cmd->num, RS_AREA_ARMED, config.user_code);
+                    }
                 break;
 
                 case AC_ARM_HOME:
-                    para_area_quick_arm(serial_sender, cmd->num, RS_AREA_STAY_ARMED);
+                    if (config.user_code == NULL) {
+                        para_area_quick_arm(serial_sender, cmd->num, RS_AREA_STAY_ARMED);
+                    } else {
+                        para_area_arm(serial_sender, cmd->num, RS_AREA_STAY_ARMED, config.user_code);
+                    }
                 break;
 
                 case AC_DISARM:
-                    log_info("PMGR: DISARM not yet supported!\n");
+                    if (config.user_code != NULL) {
+                        para_area_disarm(serial_sender, cmd->num, config.user_code);
+                    } else {
+                        log_info("PMGR: DISARM cannot be performed without user code!\n");
+                    }
                 break;
 
                 default:
