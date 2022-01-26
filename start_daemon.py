@@ -51,6 +51,9 @@ else:
 if "user_code" in config and config["user_code"] != "":
     args += " -u " + config["user_code"]
 
+if "status_period" in config:
+    args += " -S " + str(config["status_period"])
+
 print("The final command:")
 print(args)
 os.system(args)

@@ -87,16 +87,17 @@ int main(int argc, char **argv)
         {"version",      no_argument,  &print_version, 1},
         /* These options don’t set a flag.
             We distinguish them by their indices. */
-        {"mqtt_server",  required_argument, 0, 'm'},
-        {"mqtt_port",    required_argument, 0, 'p'},
-        {"mqtt_topic",   required_argument, 0, 't'},
-        {"area",         required_argument, 0, 'a'},
-        {"zones",        required_argument, 0, 'z'},
-        {"daemon",       no_argument,       0, 'D'},
-        {"device",       required_argument, 0, 'd'},
-        {"user_code",    required_argument, 0, 'u'},
-        {"help",         no_argument,       0, 'h'},
-        {"verbose",      no_argument,       0, 'v'},
+        {"mqtt_server",   required_argument, 0, 'm'},
+        {"mqtt_port",     required_argument, 0, 'p'},
+        {"mqtt_topic",    required_argument, 0, 't'},
+        {"area",          required_argument, 0, 'a'},
+        {"zones",         required_argument, 0, 'z'},
+        {"daemon",        no_argument,       0, 'D'},
+        {"device",        required_argument, 0, 'd'},
+        {"user_code",     required_argument, 0, 'u'},
+        {"status_period", required_argument, 0, 'S'},
+        {"help",          no_argument,       0, 'h'},
+        {"verbose",       no_argument,       0, 'v'},
         {0, 0, 0, 0}
     };
 
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
     char *serialdevice = NULL;
 
     while(1) {
-        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:hv", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:S:hv", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -164,7 +165,7 @@ int main(int argc, char **argv)
                     int zoneindex = strtol(zone, NULL, 10);
 
                     if (zoneindex <= 0 || zoneindex > MAX_ZONES) {
-                        log_error("Zone number %d is not valid!\n", zoneindex);
+                        log_error("PARAEVO: Zone number %d is not valid!\n", zoneindex);
                         return_main = -4;
                         goto EXIT_MAIN;
                     }
@@ -185,6 +186,16 @@ int main(int argc, char **argv)
 
             case 'u':
                 config.user_code = optarg;
+            break;
+
+            case 'S':
+                config.area_status_period = strtol(optarg, NULL, 10);
+
+                if (config.area_status_period < 60) {
+                    log_error("PARAEVO: area request period cannot be shorter than 60 seconds!\n")
+                    return_main = -9;
+                    goto EXIT_MAIN;
+                }
             break;
 
             case 'D':

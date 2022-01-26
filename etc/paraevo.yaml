@@ -1,6 +1,7 @@
 device: /dev/serial/by-id/usb-PARADOX_PARADOX_APR-PRT3_a4008936-if00-port0
 daemon: false
 verbose: true
+status_period: 60
 mqtt:
   server: 192.168.0.100
 user_code: "123456"
