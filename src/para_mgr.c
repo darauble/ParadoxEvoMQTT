@@ -461,7 +461,16 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
         case G_ARMING_WITH_KEYSWITCH:
         case G_SPECIAL_ARMING:
             log_verbose("PMGR-G: area %d armed with event group: %d, event %d\n", area_num, event_group, event_num);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
+            if (areas[area_num - 1]->status == RS_AREA_DISARMED) {
+                if (event_group == G_SPECIAL_ARMING && event_num == 4) {
+                    area_set_status(area_num, RS_AREA_STAY_ARMED);
+                } else {
+                    area_set_status(area_num, RS_AREA_ARMED);
+                }
+                area_update_mqtt_state(area_num);
+                send_area_report(area_num, mqtt_area_report);
+            }
         break;
 
         case G_DISARM_WITH_MASTER:
@@ -475,7 +484,10 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
         case G_ALARM_CANCELLED_WITH_KEYSWITCH:
         case G_SPECIAL_DISARM:
             log_verbose("PMGR-G: disarm group %d, event %d, area %d\n", event_group, event_num, area_num);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
+            area_set_status(area_num, RS_AREA_DISARMED);
+            area_update_mqtt_state(area_num);
+            send_area_report(area_num, mqtt_area_report);
         break;
 
 
@@ -488,7 +500,10 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
             zone_set_alarm(event_num, RS_ZONE_IN_ALARM);
             zone_update_mqtt_state(event_num);
             send_zone_report(event_num, mqtt_zone_report);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
+            area_set_alarm(area_num, RS_AREA_IN_ALARM);
+            area_update_mqtt_state(area_num);
+            send_area_report(area_num, mqtt_area_report);
         break;
 
         case G_ZONE_FIRE_ALARM:
@@ -496,7 +511,10 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
             zone_set_fire(event_num, RS_ZONE_FIRE);
             zone_update_mqtt_state(event_num);
             send_zone_report(event_num, mqtt_zone_report);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
+            area_set_alarm(area_num, RS_AREA_IN_ALARM);
+            area_update_mqtt_state(area_num);
+            send_area_report(area_num, mqtt_area_report);
         break;
 
         case G_ZONE_ALARM_RESTORE:
@@ -504,7 +522,7 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
             zone_set_alarm(event_num, RS_OK);
             zone_update_mqtt_state(event_num);
             send_zone_report(event_num, mqtt_zone_report);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
         break;
 
         case G_ZONE_FIRE_RESTORE:
@@ -512,7 +530,7 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
             zone_set_fire(event_num, RS_OK);
             zone_update_mqtt_state(event_num);
             send_zone_report(event_num, mqtt_zone_report);
-            para_request_area_status(serial_sender, area_num);
+            // para_request_area_status(serial_sender, area_num);
         break;
 
         case G_ZONE_SHUTDOWN:
@@ -542,13 +560,31 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
         case G_STATUS_1:
             log_verbose("PMGR-G: STATUS_1 %d on area %d\n", event_num, area_num);
             
-            if (area_num > 0 && area_num < MAX_AREAS) {
-                para_request_area_status(serial_sender, area_num);
-            } else {
-                for (int i = 0; i < MAX_AREAS; i++) {
-                    if (areas[i] != NULL) {
-                        para_request_area_status(serial_sender, areas[i]->num);
-                    }
+            if (area_num > 0 && area_num <= MAX_AREAS) {
+                // para_request_area_status(serial_sender, area_num);
+                switch(event_num) {
+                    case 2:
+                        area_set_status(area_num, RS_AREA_STAY_ARMED);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    break;
+
+                    case 0:
+                    case 1:
+                    case 3:
+                        area_set_status(area_num, RS_AREA_ARMED);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    break;
+
+                    case 4:
+                    case 5:
+                    case 6:
+                    case 7:
+                        area_set_alarm(area_num, RS_AREA_IN_ALARM);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    break;
                 }
             }
         break;
@@ -556,13 +592,20 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
         case G_STATUS_2:
             log_verbose("PMGR-G: STATUS_2 %d on area %d\n", event_num, area_num);
             
-            if (area_num > 0 && area_num < MAX_AREAS) {
-                para_request_area_status(serial_sender, area_num);
-            } else {
-                for (int i = 0; i < MAX_AREAS; i++) {
-                    if (areas[i] != NULL) {
-                        para_request_area_status(serial_sender, areas[i]->num);
-                    }
+            if (area_num > 0 && area_num <= MAX_AREAS) {
+                // para_request_area_status(serial_sender, area_num);
+                switch(event_num) {
+                    case 3:
+                        area_set_trouble(area_num, RS_AREA_TROUBLE);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    break;
+
+                    case 4:
+                        area_set_memory(area_num, RS_AREA_ZONE_IN_MEMORY);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    break;
                 }
             }
         break;
@@ -588,7 +631,19 @@ static void para_process_prt3_response(char *prt3_string, void *mqtt_area_report
                     set_label(areas[area_num - 1]->name, prt3_string + 5);
                     log_debug("PMGR-AL: area label set: [%s]\n", areas[area_num - 1]->name);
                 } else {
-                    log_error("PMGR: ignoring label of area %d\n", area_num);
+                    log_error("PMGR-AL: ignoring label of area %d\n", area_num);
+                }
+            } else if (prt3_string[1] == PRT3_DISARM) {
+                int area_num = get_number_at_substring(prt3_string + 2, 3);
+
+                if (area_num > 0 && area_num < MAX_AREAS && areas[area_num - 1] != NULL) {
+                    if (prt3_string[6] == 'o' && prt3_string[7] == 'k') {
+                        log_debug("PMGR-AD: area %d disarmed\n", area_num);
+                        
+                        area_set_status(area_num, RS_AREA_DISARMED);
+                        area_update_mqtt_state(area_num);
+                        send_area_report(area_num, mqtt_area_report);
+                    }
                 }
             } else {
                 log_error("PMGR: area response %c not supported\n", prt3_string[1]);
