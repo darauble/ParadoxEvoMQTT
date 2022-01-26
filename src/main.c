@@ -4,7 +4,7 @@
  *
  * main.c
  *
- *  Created on: Jan 6, 2022
+ *  Created on: Oct 24, 2021
  *      Author: Darau, blė
  *
  *  This file is a part of personal use utilities developed to be used
@@ -29,9 +29,10 @@
  *       events 64 and 65 (a bit excess, but reliable).
  *       Added ARM_AWAY and ARM_HOME commands support via MQTT (No DISARM yet!)
  * v0.3: Adding utility key support, so these can be used as switches.
+ * v0.4: Adding control user code support, enabling Disarm.
  */
 #define V_MAJOR 0
-#define V_MINOR 3
+#define V_MINOR 4
 
 #include <stdio.h>
 #include <string.h>
@@ -56,6 +57,7 @@ para_evo_config_t config = {
     .mqtt_port = 1883,
     .mqtt_topic = "darauble/paraevo",
     .mqtt_client_id = "paraevo_daemon",
+    .user_code = NULL,
 };
 
 void *killpublisher = NULL;
@@ -89,6 +91,7 @@ int main(int argc, char **argv)
         {"zones",        required_argument, 0, 'z'},
         {"daemon",       no_argument,       0, 'D'},
         {"device",       required_argument, 0, 'd'},
+        {"user_code",    required_argument, 0, 'u'},
         {"help",         no_argument,       0, 'h'},
         {"verbose",      no_argument,       0, 'v'},
         {0, 0, 0, 0}
@@ -106,7 +109,7 @@ int main(int argc, char **argv)
     char *serialdevice = NULL;
 
     while(1) {
-        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:hv", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:hv", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -175,6 +178,10 @@ int main(int argc, char **argv)
 
             case 'd':
                 serialdevice = optarg;
+            break;
+
+            case 'u':
+                config.user_code = optarg;
             break;
 
             case 'D':
@@ -324,25 +331,26 @@ void print_usage()
         "Usage: paraevo -d <USART device> -a <area> -z <zone list> --mqtt_server=<server address> [options]\n"
         "\n"
         "Main options:\n"
-        "  -D, --daemon                      Run application in daemon mode.\n"
-        "  -d <device>, --device=<device>    Set device of PRT3 module.\n"
-        "                                    E.g. paraevo -d /dev/ttyUSB0\n"
-        "  -a <area>, --area=<area>          Set an area number to monitor. Several areas\n"
-        "                                    can be provided, e.g. -a 1 -a 2\n"
-        "  -z <zones>, --zones=<zones>       Assign zones to an area by comma-separated\n"
-        "                                    list. This switch should follow appropriate -a\n"
-        "                                    switch, so the zones in multi-area panel can\n"
-        "                                    be monitored and reported properly.\n"
-        "                                    e.g. -a 1 -z 1,3,10 -a 2 -z 4,5,8\n"
-        "  --mqtt_server=<server>            Send output to MQTT server.\n"
+        "  -D, --daemon                         Run application in daemon mode.\n"
+        "  -d <device>, --device=<device>       Set device of PRT3 module.\n"
+        "                                       E.g. paraevo -d /dev/ttyUSB0\n"
+        "  -a <area>, --area=<area>             Set an area number to monitor. Several areas\n"
+        "                                       can be provided, e.g. -a 1 -a 2\n"
+        "  -z <zones>, --zones=<zones>          Assign zones to an area by comma-separated\n"
+        "                                       list. This switch should follow appropriate -a\n"
+        "                                       switch, so the zones in multi-area panel can\n"
+        "                                       be monitored and reported properly.\n"
+        "                                       e.g. -a 1 -z 1,3,10 -a 2 -z 4,5,8\n"
+        "  -u <code>, --user_code=<code>        A panel's user code necessary for Disarm function\n"
+        "  -m <server>, --mqtt_server=<server>  Send output to MQTT server.\n"
         "Additional options:\n"
-        "  --mqtt_port=<port>                Set MQTT server's port. Default 1883.\n"
-        "  --mqtt_topic=<topic>              Set parent MQTT topic. Default \"darauble/paraevo\"\n"
+        "  -p <port>, --mqtt_port=<port>       Set MQTT server's port. Default 1883.\n"
+        "  -t <topic>, --mqtt_topic=<topic>    Set parent MQTT topic. Default \"darauble/paraevo\"\n"
         "\n"
         "Other options:\n"
-        "  -v, --verbose                     Print verbose output of daemon's actions.\n"
-        "  -h, --help                        Print this usage message and exit.\n"
-        "  --version                         Print application's version and exit.\n"
+        "  -v, --verbose                        Print verbose output of daemon's actions.\n"
+        "  -h, --help                           Print this usage message and exit.\n"
+        "  --version                            Print application's version and exit.\n"
         "\n"
     ); 
 }
