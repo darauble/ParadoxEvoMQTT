@@ -404,6 +404,8 @@ static void mqtt_start()
     MQTTAsync_connect(client, &conn_opts);
 }
 
+static mqtt_disconnected = 0;
+
 void mqtt_stop()
 {
     MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
@@ -418,6 +420,11 @@ void mqtt_stop()
     } else {
         log_error("MMGR: error stopping MQTT client: %d\n", rc);
     }
+
+    // TODO: add delay instead of busy loop
+    while (mqtt_disconnected == 0);
+
+    MQTTAsync_destroy(&client);
 }
 
 static void onConnect(void* context, MQTTAsync_successData* response)
@@ -433,11 +440,12 @@ static void onConnectFailure(void* context, MQTTAsync_failureData* response)
 
 static void onDisconnect(void* context, MQTTAsync_successData* response)
 {
-    MQTTAsync_destroy(&client);
+    mqtt_disconnected = 1;
     log_info("MMGR: MQTT client successfully disconnected.\n");
 }
 
 static void onDisconnectFailure(void* context, MQTTAsync_failureData* response) {
+    mqtt_disconnected = 1;
     log_error("MMGR: MQTT failed to disconnect: [%d] - %s\n", response->code, response->message);
 }
 

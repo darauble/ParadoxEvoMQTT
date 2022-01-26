@@ -13,7 +13,8 @@ RUN apt-get install -y \
 
 RUN apt-get install -y \
 	build-essential make gcc \
-	libpaho-mqtt-dev libzmq5-dev
+	libpaho-mqtt-dev libzmq5-dev \
+	valgrind
 
 # Change to your user's ID and group ID!
 

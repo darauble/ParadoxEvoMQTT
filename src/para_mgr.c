@@ -214,6 +214,7 @@ static void *para_mgr_thread(void *context)
 
     pthread_t requestthread;
     pthread_create(&requestthread, NULL, para_mgr_initial_request_thread, serial_sender);
+    pthread_detach(requestthread);
     
     while (1) {
         int rc = zmq_poll(items, 3, config.area_status_period * 1000);
@@ -243,6 +244,7 @@ static void *para_mgr_thread(void *context)
             // Timeout, request areas
             pthread_t t;
             pthread_create(&t, NULL, para_mgr_area_status_thread, serial_sender);
+            pthread_detach(t);
         }
     }
 
@@ -639,7 +641,7 @@ static void para_process_prt3_response(char *prt3_string, void *mqtt_area_report
                 if (area_num > 0 && area_num < MAX_AREAS && areas[area_num - 1] != NULL) {
                     if (prt3_string[6] == 'o' && prt3_string[7] == 'k') {
                         log_debug("PMGR-AD: area %d disarmed\n", area_num);
-                        
+
                         area_set_status(area_num, RS_AREA_DISARMED);
                         area_update_mqtt_state(area_num);
                         send_area_report(area_num, mqtt_area_report);
