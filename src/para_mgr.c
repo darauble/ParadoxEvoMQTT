@@ -643,11 +643,12 @@ static void para_process_command(void *mqtt_area_command, void *serial_sender)
                 break;
 
                 case AC_ARM_HOME:
-                    if (config.user_code == NULL) {
+                    // !!! For some reason Stay Arm does not work with user code on PRT3!
+                    /*if (config.user_code == NULL) { //*/
                         para_area_quick_arm(serial_sender, cmd->num, RS_AREA_STAY_ARMED);
-                    } else {
+                    /*} else {
                         para_area_arm(serial_sender, cmd->num, RS_AREA_STAY_ARMED, config.user_code);
-                    }
+                    } //*/
                 break;
 
                 case AC_DISARM:
