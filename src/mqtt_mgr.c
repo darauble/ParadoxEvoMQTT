@@ -257,9 +257,6 @@ static int mqtt_area_control(void *context, char *topicName, int topicLen, MQTTA
         }
     }
 
-    
-
-
     MQTTAsync_freeMessage(&message);
     MQTTAsync_free(topicName);
     return 1;
@@ -404,9 +401,9 @@ static void mqtt_start()
     MQTTAsync_connect(client, &conn_opts);
 }
 
-static mqtt_disconnected = 0;
+static int mqtt_disconnected = 0;
 
-void mqtt_stop()
+static void mqtt_stop()
 {
     MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
     opts.onSuccess = onDisconnect;
@@ -421,8 +418,14 @@ void mqtt_stop()
         log_error("MMGR: error stopping MQTT client: %d\n", rc);
     }
 
-    // TODO: add delay instead of busy loop
-    while (mqtt_disconnected == 0);
+    struct timespec tv = {
+        .tv_sec = 0,
+        .tv_nsec = 100000000,
+    };
+
+    while (mqtt_disconnected == 0) {
+        nanosleep(&tv, NULL);
+    }
 
     MQTTAsync_destroy(&client);
 }
