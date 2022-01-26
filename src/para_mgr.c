@@ -37,6 +37,7 @@ static para_zone_t *zones[MAX_ZONES];
 
 static void *para_mgr_thread(void *context);
 static void *para_mgr_initial_request_thread(void *serial_sender);
+static void *para_mgr_area_status_thread(void *serial_sender);
 static void para_request_area_status(void *serial_sender, int areanum);
 static void para_request_area_label(void *serial_sender, int areanum);
 static void para_area_arm(void *serial_sender, int areanum, char arm_type, char *user_code);
@@ -215,7 +216,7 @@ static void *para_mgr_thread(void *context)
     pthread_create(&requestthread, NULL, para_mgr_initial_request_thread, serial_sender);
     
     while (1) {
-        zmq_poll(items, 3, -1);
+        int rc = zmq_poll(items, 3, config.area_status_period * 1000);
 
         if (items[0].revents & ZMQ_POLLIN) {
             z_drop_message(kill_subscriber);
@@ -236,6 +237,12 @@ static void *para_mgr_thread(void *context)
             free(prt3_string);
         } else if (items[2].revents & ZMQ_POLLIN) {
             para_process_command(mqtt_area_command, serial_sender);
+        }
+
+        if (rc == 0) {
+            // Timeout, request areas
+            pthread_t t;
+            pthread_create(&t, NULL, para_mgr_area_status_thread, serial_sender);
         }
     }
 
@@ -307,6 +314,19 @@ void *para_mgr_initial_request_thread(void *serial_sender)
     }
 
     log_info("PMGR: Initial request done.\n");
+    return NULL;
+}
+
+static void *para_mgr_area_status_thread(void *serial_sender)
+{
+    log_debug("PMGR: periodic area status update\n");
+
+    for (int i = 0; i < MAX_AREAS; i++) {
+        if (areas[i]) {
+            para_request_area_status(serial_sender, areas[i]->num);
+        }
+    }
+
     return NULL;
 }
 

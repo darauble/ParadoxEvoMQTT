@@ -30,9 +30,11 @@
  *       Added ARM_AWAY and ARM_HOME commands support via MQTT (No DISARM yet!)
  * v0.3: Adding utility key support, so these can be used as switches.
  * v0.4: Adding control user code support, enabling Disarm.
+ * v0.5: Ditch many Area Status requests and get info from events.
+ *       Add periodic area update (default 60 s).
  */
 #define V_MAJOR 0
-#define V_MINOR 4
+#define V_MINOR 5
 
 #include <stdio.h>
 #include <string.h>
@@ -58,6 +60,7 @@ para_evo_config_t config = {
     .mqtt_topic = "darauble/paraevo",
     .mqtt_client_id = "paraevo_daemon",
     .user_code = NULL,
+    .area_status_period = 60,
 };
 
 void *killpublisher = NULL;
