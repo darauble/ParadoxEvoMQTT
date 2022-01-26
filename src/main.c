@@ -357,6 +357,8 @@ void print_usage()
         "                                       e.g. -a 1 -z 1,3,10 -a 2 -z 4,5,8\n"
         "  -u <code>, --user_code=<code>        A panel's user code necessary for Disarm function\n"
         "  -m <server>, --mqtt_server=<server>  Send output to MQTT server.\n"
+        "  -S <seconds>, --status_period=<seconds>  An idle timeout when to request Area Status update.\n"
+        "                                       Minimum is 60 s (and it's default).\n"
         "Additional options:\n"
         "  -p <port>, --mqtt_port=<port>       Set MQTT server's port. Default 1883.\n"
         "  -t <topic>, --mqtt_topic=<topic>    Set parent MQTT topic. Default \"darauble/paraevo\"\n"
