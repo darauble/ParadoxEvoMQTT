@@ -19,7 +19,7 @@ Adding Disarm functionality and a few fixes.
 ## v0.3
 This is the first public release and it includes the following functionality:
 * Reporting each area (1-8 in EVO96/192 case) as separate security panels: generic state and full state from PRT3
-* Reporting each zone's state on/offm zone's alarm on/off and full zone's state from PRT3.
+* Reporting each zone's state on/off, zone's alarm on/off and full zone's state from PRT3.
 * Arm and Stay Arm commands via MQTT (no Disarm yet!)
 * Utility Key press command
 * Only open MQTT server (no user/password)
