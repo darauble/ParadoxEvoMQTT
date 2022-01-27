@@ -29,6 +29,9 @@ typedef struct {
     int mqtt_port;
     char *mqtt_topic;
     char *mqtt_client_id;
+    char *mqtt_login;
+    char *mqtt_password;
+    int mqtt_retain;
     char *user_code;
     int area_status_period;
 } para_evo_config_t;

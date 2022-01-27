@@ -32,9 +32,10 @@
  * v0.4: Adding control user code support, enabling Disarm.
  * v0.5: Ditch many Area Status requests and get info from events.
  *       Add periodic area update (default 60 s).
+ * v0.6: Add MQTT login/password and retain flag.
  */
 #define V_MAJOR 0
-#define V_MINOR 5
+#define V_MINOR 6
 
 #include <stdio.h>
 #include <string.h>
@@ -59,6 +60,9 @@ para_evo_config_t config = {
     .mqtt_port = 1883,
     .mqtt_topic = "darauble/paraevo",
     .mqtt_client_id = "paraevo_daemon",
+    .mqtt_login = NULL,
+    .mqtt_password = NULL,
+    .mqtt_retain = 0,
     .user_code = NULL,
     .area_status_period = 60,
 };
@@ -90,6 +94,9 @@ int main(int argc, char **argv)
         {"mqtt_server",   required_argument, 0, 'm'},
         {"mqtt_port",     required_argument, 0, 'p'},
         {"mqtt_topic",    required_argument, 0, 't'},
+        {"mqtt_login",    required_argument, 0, 'l'},
+        {"mqtt_password", required_argument, 0, 'w'},
+        {"mqtt_retain",   no_argument,       0, 'r'},
         {"area",          required_argument, 0, 'a'},
         {"zones",         required_argument, 0, 'z'},
         {"daemon",        no_argument,       0, 'D'},
@@ -113,7 +120,7 @@ int main(int argc, char **argv)
     char *serialdevice = NULL;
 
     while(1) {
-        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:S:hv", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "m:p:t:l:w:ra:z:Dd:u:S:hv", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -136,6 +143,18 @@ int main(int argc, char **argv)
 
             case 't':
                 config.mqtt_topic = optarg;
+            break;
+
+            case 'l':
+                config.mqtt_login = optarg;
+            break;
+
+            case 'w':
+                config.mqtt_password = optarg;
+            break;
+
+            case 'r':
+                config.mqtt_retain = 1;
             break;
 
             case 'a':

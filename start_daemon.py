@@ -1,11 +1,21 @@
 #!/usr/bin/python3
 import yaml
 import os
+import sys
 
-with open("/etc/paraevo.yaml", "r") as f:
-    config = yaml.load(f)
+binary_path = "/opt/paraevo/paraevo"
+config_file = "/etc/paraevo.yaml"
 
-args = "/opt/paraevo/paraevo"
+if len(sys.argv) > 1:
+    config_file = sys.argv[1]
+
+with open(config_file, "r") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+if "binary_path" in config:
+    binary_path = config["binary_path"]
+
+args = binary_path
 
 if "verbose" in config and config["verbose"] == True:
     args += " -v"
@@ -26,7 +36,17 @@ if "mqtt" in config:
         print("No MQTT server in config!")
     
     if "port" in config["mqtt"]:
-        args += " --mqtt_port=" + config["mqtt"]["port"]
+        args += " --mqtt_port=" + str(config["mqtt"]["port"])
+    
+    if "login" in config["mqtt"]:
+        args += " --mqtt_login=" + config["mqtt"]["login"]
+    
+    if "password" in config["mqtt"]:
+        args += " --mqtt_password=" + config["mqtt"]["password"]
+    
+    if "retain" in config["mqtt"] and config["mqtt"]["retain"] == True:
+        args += " -r"
+
 else:
     print("No MQTT settings in config!")
     exit(-1)
@@ -53,6 +73,9 @@ if "user_code" in config and config["user_code"] != "":
 
 if "status_period" in config:
     args += " -S " + str(config["status_period"])
+
+if "log_file" in config:
+    args += " >> " + config["log_file"] + " 2>&1"
 
 print("The final command:")
 print(args)
