@@ -4,6 +4,13 @@ This is a Linux daemon for interacting with Paradox EVO48/92/192 security panel 
 This daemon is made with the purpose for interaction with the Home Assistant and complies with it's defaul MQTT Alarm Panel interface.
 
 # Version history
+## v0.6
+Added MQTT username/password options and a flag if to retain all the messages sent by the daemon. Retain can be helpful when Home Assistant (or other "house mind") is restarted. If messages are not retained, Home Assistant would not know the immediate state of the panel and set it to "unknown".
+
+Also enhanced the loader script a bit:
+* Ability to override daemon binary's path
+* Ability to provide a log file to redirect daemon's output
+
 ## v0.5
 Area status management rewritten. Instead of calling area status on every important event, the more intelligent parsing of those events added. The area status is still requested, but only periodically on given timeout when there's no other activity.
 

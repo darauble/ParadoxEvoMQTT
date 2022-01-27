@@ -391,11 +391,14 @@ static void mqtt_start()
     conn_opts.onSuccess = onConnect;
     conn_opts.onFailure = onConnectFailure;
     conn_opts.context = client;
+
+    conn_opts.username = config.mqtt_login;
+    conn_opts.password = config.mqtt_password;
     
     conn_opts.will = &will_opts;
     will_opts.topicName = lwt_topic;
     will_opts.message = DAEMON_OFFLINE;
-    will_opts.retained = 1;
+    will_opts.retained = config.mqtt_retain;
     
 
     MQTTAsync_connect(client, &conn_opts);
@@ -478,7 +481,7 @@ static void mqtt_send_lwt()
     msg.payload = DAEMON_ONLINE;
     msg.payloadlen = strlen(msg.payload);
     msg.qos = 1;
-    msg.retained = 1;
+    msg.retained = config.mqtt_retain;
 
     MQTTAsync_sendMessage(client, lwt_topic, &msg, NULL);
 }
@@ -489,7 +492,7 @@ static void mqtt_send(const char *topic, const char *payload)
     msg.payload = (char *) payload;
     msg.payloadlen = strlen(msg.payload);
     msg.qos = 1;
-    msg.retained = 0;
+    msg.retained = config.mqtt_retain;
 
     MQTTAsync_sendMessage(client, topic, &msg, NULL);
 }

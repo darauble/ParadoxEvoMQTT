@@ -32,9 +32,10 @@
  * v0.4: Adding control user code support, enabling Disarm.
  * v0.5: Ditch many Area Status requests and get info from events.
  *       Add periodic area update (default 60 s).
+ * v0.6: Add MQTT login/password and retain flag.
  */
 #define V_MAJOR 0
-#define V_MINOR 5
+#define V_MINOR 6
 
 #include <stdio.h>
 #include <string.h>
@@ -59,6 +60,9 @@ para_evo_config_t config = {
     .mqtt_port = 1883,
     .mqtt_topic = "darauble/paraevo",
     .mqtt_client_id = "paraevo_daemon",
+    .mqtt_login = NULL,
+    .mqtt_password = NULL,
+    .mqtt_retain = 0,
     .user_code = NULL,
     .area_status_period = 60,
 };
@@ -90,6 +94,9 @@ int main(int argc, char **argv)
         {"mqtt_server",   required_argument, 0, 'm'},
         {"mqtt_port",     required_argument, 0, 'p'},
         {"mqtt_topic",    required_argument, 0, 't'},
+        {"mqtt_login",    required_argument, 0, 'l'},
+        {"mqtt_password", required_argument, 0, 'w'},
+        {"mqtt_retain",   no_argument,       0, 'r'},
         {"area",          required_argument, 0, 'a'},
         {"zones",         required_argument, 0, 'z'},
         {"daemon",        no_argument,       0, 'D'},
@@ -113,7 +120,7 @@ int main(int argc, char **argv)
     char *serialdevice = NULL;
 
     while(1) {
-        c = getopt_long(argc, argv, "m:p:t:a:z:Dd:u:S:hv", long_options, &opt_idx);
+        c = getopt_long(argc, argv, "m:p:t:l:w:ra:z:Dd:u:S:hv", long_options, &opt_idx);
 
         if (c < 0) {
             break;
@@ -136,6 +143,18 @@ int main(int argc, char **argv)
 
             case 't':
                 config.mqtt_topic = optarg;
+            break;
+
+            case 'l':
+                config.mqtt_login = optarg;
+            break;
+
+            case 'w':
+                config.mqtt_password = optarg;
+            break;
+
+            case 'r':
+                config.mqtt_retain = 1;
             break;
 
             case 'a':
@@ -345,28 +364,32 @@ void print_usage()
         "Usage: paraevo -d <USART device> -a <area> -z <zone list> --mqtt_server=<server address> [options]\n"
         "\n"
         "Main options:\n"
-        "  -D, --daemon                         Run application in daemon mode.\n"
-        "  -d <device>, --device=<device>       Set device of PRT3 module.\n"
-        "                                       E.g. paraevo -d /dev/ttyUSB0\n"
-        "  -a <area>, --area=<area>             Set an area number to monitor. Several areas\n"
-        "                                       can be provided, e.g. -a 1 -a 2\n"
-        "  -z <zones>, --zones=<zones>          Assign zones to an area by comma-separated\n"
-        "                                       list. This switch should follow appropriate -a\n"
-        "                                       switch, so the zones in multi-area panel can\n"
-        "                                       be monitored and reported properly.\n"
-        "                                       e.g. -a 1 -z 1,3,10 -a 2 -z 4,5,8\n"
-        "  -u <code>, --user_code=<code>        A panel's user code necessary for Disarm function\n"
-        "  -m <server>, --mqtt_server=<server>  Send output to MQTT server.\n"
-        "  -S <seconds>, --status_period=<seconds>  An idle timeout when to request Area Status update.\n"
-        "                                       Minimum is 60 s (and it's default).\n"
+        "  -D, --daemon                             Run application in daemon mode.\n"
+        "  -d <device>   --device=<device>          Set device of PRT3 module.\n"
+        "                                           E.g. paraevo -d /dev/ttyUSB0\n"
+        "  -a <area>     --area=<area>              Set an area number to monitor. Several areas\n"
+        "                                           can be provided, e.g. -a 1 -a 2\n"
+        "  -z <zones>    --zones=<zones>            Assign zones to an area by comma-separated\n"
+        "                                           list. This switch should follow appropriate -a\n"
+        "                                           switch, so the zones in multi-area panel can\n"
+        "                                           be monitored and reported properly.\n"
+        "                                           e.g. -a 1 -z 1,3,10 -a 2 -z 4,5,8\n"
+        "  -u <code>     --user_code=<code>         A panel's user code (necessary for Disarm function).\n"
+        "  -m <server>   --mqtt_server=<server>     Send output to MQTT server.\n"
+        "\n"
         "Additional options:\n"
-        "  -p <port>, --mqtt_port=<port>       Set MQTT server's port. Default 1883.\n"
-        "  -t <topic>, --mqtt_topic=<topic>    Set parent MQTT topic. Default \"darauble/paraevo\"\n"
+        "  -p <port>     --mqtt_port=<port>         Set MQTT server's port. Default 1883.\n"
+        "  -t <topic>    --mqtt_topic=<topic>       Set parent MQTT topic. Default \"darauble/paraevo\".\n"
+        "  -l <login>    --mqtt_login=<login>       Set a username/login for MQTT server (if required).\n"
+        "  -w <pass>     --mqtt_password=<pass>     Set a password for MQTT server (if required).\n"
+        "  -r,           --mqtt_retain              If given, all messages sent by the daemon will be retained.\n"
+        "  -S <seconds>  --status_period=<seconds>  An idle timeout when to request Area Status update.\n"
+        "                                           Minimum is 60 s (and it's default).\n"
         "\n"
         "Other options:\n"
-        "  -v, --verbose                        Print verbose output of daemon's actions.\n"
-        "  -h, --help                           Print this usage message and exit.\n"
-        "  --version                            Print application's version and exit.\n"
+        "  -v, --verbose                            Print verbose output of daemon's actions.\n"
+        "  -h, --help                               Print this usage message and exit.\n"
+        "  --version                                Print application's version and exit.\n"
         "\n"
     ); 
 }

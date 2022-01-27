@@ -1,10 +1,33 @@
+# Mandatory: the path to the USB serial device where PRT3 is attached
 device: /dev/serial/by-id/usb-PARADOX_PARADOX_APR-PRT3_a4008936-if00-port0
+
+# Not-mandatory: redirect daemon's output to this log file
+log_file: /log/paraevo.log
+
+# Not-mandatory: provide different path to daemon's binary than the default
+binary_path: ./paraevo
+
+# Not-mandatory: if daemon should run in background
 daemon: false
+
+# Not-mandatory: turn on verbose output
 verbose: true
+
+# Not-mandatory: how often to request area status while Paradox is idle
 status_period: 60
+
+# MQTT server options. "server" is mandatory, other options - not
 mqtt:
   server: 192.168.0.100
+  port: 1883
+  login: theuser
+  password: thepassword
+  retain: true
+
+# Not mandatory: user code to interact with the panel. Strictly required only for Disarm action.
 user_code: "123456"
+
+# Areas and their corresponding zones. At least one area is required.
 areas:
   - num: 1
     zones:
@@ -16,3 +39,8 @@ areas:
       - 6
       - 7
       - 10
+  - num: 2
+    zones:
+      - 11
+      - 12
+      - 13
