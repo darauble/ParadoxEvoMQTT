@@ -4,6 +4,13 @@ This is a Linux daemon for interacting with Paradox EVO48/92/192 security panel 
 This daemon is made with the purpose for interaction with the Home Assistant and complies with it's defaul MQTT Alarm Panel interface.
 
 # Version history
+## v0.5
+Area status management rewritten. Instead of calling area status on every important event, the more intelligent parsing of those events added. The area status is still requested, but only periodically on given timeout when there's no other activity.
+
+Some thread related memory leaks (well, their sympthoms) fixed by detaching particular independent threads.
+
+MQTT async client disconnection fixed and done properly with full destroy.
+
 ## v0.4
 Adding Disarm functionality and a few fixes.
 * Providing `-u` switch to give panel's user code for Disarm action
@@ -12,7 +19,7 @@ Adding Disarm functionality and a few fixes.
 ## v0.3
 This is the first public release and it includes the following functionality:
 * Reporting each area (1-8 in EVO96/192 case) as separate security panels: generic state and full state from PRT3
-* Reporting each zone's state on/offm zone's alarm on/off and full zone's state from PRT3.
+* Reporting each zone's state on/off, zone's alarm on/off and full zone's state from PRT3.
 * Arm and Stay Arm commands via MQTT (no Disarm yet!)
 * Utility Key press command
 * Only open MQTT server (no user/password)
@@ -84,7 +91,7 @@ For the meaning of these value please consult the **PRT3 ASCII Programming Guide
 The listening topic is set to `darauble/paraevo/area/1/set`. The default values from Home Assistant are accepted:
 * ARM_AWAY - using Area Quick Arm
 * ARM_HOME - using Area Quick ARM
-* DISARM - *support pending (it needs a user code)*
+* DISARM - user code must be provided via `-u` switch or YAML entry
 
 The entry in `configuration.yaml` of Home Assistant is simple as following:
 ```
@@ -153,4 +160,3 @@ binary_sensor:
     payload_on: "online"
     payload_off: "offline"
 ```
-

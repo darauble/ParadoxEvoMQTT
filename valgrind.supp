@@ -1,0 +1,13 @@
+
+{
+    <socketcall_sendto>
+    Memcheck:Param
+    socketcall.sendto(msg)
+    fun:send
+}
+{
+    <socketcall_sendto>
+    Memcheck:Param
+    socketcall.send(msg)
+    fun:send
+}

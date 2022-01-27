@@ -257,9 +257,6 @@ static int mqtt_area_control(void *context, char *topicName, int topicLen, MQTTA
         }
     }
 
-    
-
-
     MQTTAsync_freeMessage(&message);
     MQTTAsync_free(topicName);
     return 1;
@@ -404,7 +401,9 @@ static void mqtt_start()
     MQTTAsync_connect(client, &conn_opts);
 }
 
-void mqtt_stop()
+static int mqtt_disconnected = 0;
+
+static void mqtt_stop()
 {
     MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
     opts.onSuccess = onDisconnect;
@@ -418,6 +417,17 @@ void mqtt_stop()
     } else {
         log_error("MMGR: error stopping MQTT client: %d\n", rc);
     }
+
+    struct timespec tv = {
+        .tv_sec = 0,
+        .tv_nsec = 100000000,
+    };
+
+    while (mqtt_disconnected == 0) {
+        nanosleep(&tv, NULL);
+    }
+
+    MQTTAsync_destroy(&client);
 }
 
 static void onConnect(void* context, MQTTAsync_successData* response)
@@ -433,11 +443,12 @@ static void onConnectFailure(void* context, MQTTAsync_failureData* response)
 
 static void onDisconnect(void* context, MQTTAsync_successData* response)
 {
-    MQTTAsync_destroy(&client);
+    mqtt_disconnected = 1;
     log_info("MMGR: MQTT client successfully disconnected.\n");
 }
 
 static void onDisconnectFailure(void* context, MQTTAsync_failureData* response) {
+    mqtt_disconnected = 1;
     log_error("MMGR: MQTT failed to disconnect: [%d] - %s\n", response->code, response->message);
 }
 

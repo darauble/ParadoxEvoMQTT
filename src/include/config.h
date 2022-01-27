@@ -30,6 +30,7 @@ typedef struct {
     char *mqtt_topic;
     char *mqtt_client_id;
     char *user_code;
+    int area_status_period;
 } para_evo_config_t;
 
 #endif /* PARA_EVO_CONFIG_H */

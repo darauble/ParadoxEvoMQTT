@@ -89,6 +89,7 @@ typedef enum {
     PRT3_ZONE = 'Z',
     //PRT3_USER = 'U', // TBD
     PRT3_LABEL = 'L',
+    PRT3_DISARM = 'D',
 } para_prt3_input_t;
 
 typedef enum {
