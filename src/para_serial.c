@@ -103,7 +103,10 @@ void *serial_thread(void *context)
 
     char buffer[PARA_SERIAL_BUFF_LEN];
     memset(buffer, 0, PARA_SERIAL_BUFF_LEN);
-    int bufpos = 0;
+
+    char serial_input[PARA_SERIAL_INPUT_LEN];
+    memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
+    int input_pos = 0;
 
     zmq_pollitem_t items[] = {
         { kill_subscriber, 0, ZMQ_POLLIN, 0 },
@@ -122,36 +125,46 @@ void *serial_thread(void *context)
             break;
         } else if (items[1].revents & ZMQ_POLLIN) {
             // Bytes in serial to read?
-            ssize_t br = read(fd, &buffer[bufpos], 1);
+            // ssize_t br = read(fd, &serial_input[input_pos], 1);
+            ssize_t br = read(fd, buffer, PARA_SERIAL_BUFF_LEN);
 
-            while (br > 0) {
-                if (buffer[bufpos] == PARA_SERIAL_EOL) {
-                    buffer[bufpos] = 0;
-                    log_verbose("SERIAL: [%s]\n", buffer);
-                    // TODO: send out
-                    zmq_msg_t message;
+            log_debug("SERIAL: buffer %ld [%s]\n", br, buffer);
 
-                    zmq_msg_init_size (&message, bufpos);
-                    memcpy(zmq_msg_data(&message), buffer, bufpos);
-                    zmq_msg_send (&message, serial_publisher, 0);
-                    zmq_msg_close (&message);
+            if (br > 0) {
+                for (int i = 0; i < br; i++) {
+                    if (buffer[i] == PARA_SERIAL_EOL) {
+                        log_verbose("SERIAL: [%s]\n", serial_input);
 
-                    // Cleanup and read again
-                    memset(buffer, 0, PARA_SERIAL_BUFF_LEN);
-                    bufpos = 0;
-                } else if (bufpos < PARA_SERIAL_BUFF_LEN) {
-                    bufpos++;
-                } else {
-                    log_debug("SERIAL: reached end of buffer, cleaning for next round.\n");
-                    memset(buffer, 0, PARA_SERIAL_BUFF_LEN);
-                    bufpos = 0;
+                        // TODO: send out
+                        zmq_msg_t message;
+
+                        zmq_msg_init_size (&message, input_pos);
+                        memcpy(zmq_msg_data(&message), serial_input, input_pos);
+                        zmq_msg_send (&message, serial_publisher, 0);
+                        zmq_msg_close (&message);
+
+                        // Cleanup and read again
+                        memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
+                        input_pos = 0;
+                    } else {
+                        serial_input[input_pos++] = buffer[i];
+
+                        if (input_pos == PARA_SERIAL_INPUT_LEN - 1) {
+                            // Something awry happened, input should not be that long!
+                            log_error("SERIAL: input buffer [%s] is too long!\n", serial_input);
+
+                            memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
+                            input_pos = 0;
+                        }
+                    }
                 }
 
-                br = read(fd, &buffer[bufpos], 1);
-            }/* else if (br <= 0) {
-                log_error("SERIAL: error reading from device %ld, exiting.\n", br);
-                break;
-            }*/
+                memset(buffer, 0, PARA_SERIAL_BUFF_LEN);
+            } else if (br == 0) {
+                log_verbose("SERIAL: nothing read!\n");
+            } else {
+                log_error("SERIAL: error reading from device %ld.\n", br);
+            }
         } else if (items[2].revents & ZMQ_POLLIN) {
             // log_info("SERIAL: receiving command to send to EVO...\n");
             zmq_msg_t message;
@@ -173,9 +186,6 @@ void *serial_thread(void *context)
                 if (wrc != size + 1) {
                     log_debug("\nSERIAL: wrote less bytes than expected: %ld!\n", wrc);
                 }
-                //tcflush(fd, TCIOFLUSH);
-                
-                //log_info("%ld bytes written\n", wrc);
 
                 free(output);
                 log_debug("done\n");

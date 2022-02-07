@@ -596,6 +596,12 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
             if (area_num > 0 && area_num <= MAX_AREAS) {
                 // para_request_area_status(serial_sender, area_num);
                 switch(event_num) {
+                    case 1:
+                        if (areas[area_num - 1]->status == RS_AREA_DISARMED) {
+                            area_set_status(area_num, RS_AREA_EXIT_DELAY);
+                            area_update_mqtt_state(area_num);
+                            send_area_report(area_num, mqtt_area_report);
+                        }
                     case 3:
                         area_set_trouble(area_num, RS_AREA_TROUBLE);
                         area_update_mqtt_state(area_num);
@@ -938,6 +944,10 @@ static void area_update_mqtt_state(int area_num)
             case RS_AREA_INSTANT_ARMED:
                 // TODO: check bypassed zones to set to MQP_ARMED_CUSTOM_BYPASS
                 area->mqtt_state = MQP_ARMED_AWAY;
+            break;
+
+            case RS_AREA_EXIT_DELAY:
+                area->mqtt_state = MQP_ARMING;
             break;
         }
     } else {

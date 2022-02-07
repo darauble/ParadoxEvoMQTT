@@ -109,6 +109,7 @@ typedef enum {
     RS_AREA_FORCE_ARMED = 'F',
     RS_AREA_STAY_ARMED = 'S',
     RS_AREA_INSTANT_ARMED = 'I',
+    RS_AREA_EXIT_DELAY = 'E',
     RS_AREA_ZONE_IN_MEMORY = 'M',
     RS_AREA_TROUBLE = 'T',
     RS_AREA_NOT_READY = 'N',
