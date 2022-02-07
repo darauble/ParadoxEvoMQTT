@@ -35,9 +35,10 @@
  * v0.6: Add MQTT login/password and retain flag.
  * v0.7: Change reading to buffered, as reading by one byte causes
  *       excessive overuse of system call.
+ *       Add "arming" (or Exit Delay) status handling.
  */
 #define V_MAJOR 0
-#define V_MINOR 6
+#define V_MINOR 7
 
 #include <stdio.h>
 #include <string.h>
