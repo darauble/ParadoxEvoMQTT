@@ -163,37 +163,8 @@ void *serial_thread(void *context)
             } else if (br == 0) {
                 log_verbose("SERIAL: nothing read!\n");
             } else {
-                log_error("SERIAL: error reading from device %ld, exiting.\n", br);
+                log_error("SERIAL: error reading from device %ld.\n", br);
             }
-
-            /*while (br > 0) {
-                if (serial_input[input_pos] == PARA_SERIAL_EOL) {
-                    serial_input[input_pos] = 0;
-                    log_verbose("SERIAL: [%s]\n", serial_input);
-                    // TODO: send out
-                    zmq_msg_t message;
-
-                    zmq_msg_init_size (&message, input_pos);
-                    memcpy(zmq_msg_data(&message), serial_input, input_pos);
-                    zmq_msg_send (&message, serial_publisher, 0);
-                    zmq_msg_close (&message);
-
-                    // Cleanup and read again
-                    memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
-                    input_pos = 0;
-                } else if (input_pos < PARA_SERIAL_INPUT_LEN) {
-                    input_pos++;
-                } else {
-                    log_debug("SERIAL: reached end of serial_input, cleaning for next round.\n");
-                    memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
-                    input_pos = 0;
-                }
-
-                br = read(fd, &serial_input[input_pos], 1);
-            }/* else if (br <= 0) {
-                log_error("SERIAL: error reading from device %ld, exiting.\n", br);
-                break;
-            }*/
         } else if (items[2].revents & ZMQ_POLLIN) {
             // log_info("SERIAL: receiving command to send to EVO...\n");
             zmq_msg_t message;
@@ -215,9 +186,6 @@ void *serial_thread(void *context)
                 if (wrc != size + 1) {
                     log_debug("\nSERIAL: wrote less bytes than expected: %ld!\n", wrc);
                 }
-                //tcflush(fd, TCIOFLUSH);
-                
-                //log_info("%ld bytes written\n", wrc);
 
                 free(output);
                 log_debug("done\n");
