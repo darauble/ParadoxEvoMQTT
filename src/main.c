@@ -33,6 +33,8 @@
  * v0.5: Ditch many Area Status requests and get info from events.
  *       Add periodic area update (default 60 s).
  * v0.6: Add MQTT login/password and retain flag.
+ * v0.7: Change reading to buffered, as reading by one byte causes
+ *       excessive overuse of system call.
  */
 #define V_MAJOR 0
 #define V_MINOR 6
