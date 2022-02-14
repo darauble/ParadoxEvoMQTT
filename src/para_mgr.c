@@ -463,7 +463,7 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
         case G_SPECIAL_ARMING:
             log_verbose("PMGR-G: area %d armed with event group: %d, event %d\n", area_num, event_group, event_num);
             
-            if (areas[area_num - 1]->status == RS_AREA_DISARMED) {
+            if (areas[area_num - 1]->status == RS_AREA_DISARMED || areas[area_num - 1]->status == RS_AREA_EXIT_DELAY) {
                 if (event_group == G_SPECIAL_ARMING && event_num == 4) {
                     area_set_status(area_num, RS_AREA_STAY_ARMED);
                 } else {

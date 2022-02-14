@@ -4,6 +4,9 @@ This is a Linux daemon for interacting with Paradox EVO48/92/192 security panel 
 This daemon is made with the purpose for interaction with the Home Assistant and complies with it's defaul MQTT Alarm Panel interface.
 
 # Version history
+## v0.8
+Fixed a bug which prevented timely report of Armed state after the Exit Delay.
+
 ## v0.7
 The syscall reading abuse was fixed. Instead of banging `read` with one byte added an intermediate buffer to read as much bytes as are possible at any given time and parse it.
 

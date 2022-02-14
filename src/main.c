@@ -36,9 +36,10 @@
  * v0.7: Change reading to buffered, as reading by one byte causes
  *       excessive overuse of system call.
  *       Add "arming" (or Exit Delay) status handling.
+ * v0.8: Fixed a bug preventing of correct reporting of Armed state after Exit Delay.
  */
 #define V_MAJOR 0
-#define V_MINOR 7
+#define V_MINOR 8
 
 #include <stdio.h>
 #include <string.h>
