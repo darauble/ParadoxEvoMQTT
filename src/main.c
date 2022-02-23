@@ -37,9 +37,10 @@
  *       excessive overuse of system call.
  *       Add "arming" (or Exit Delay) status handling.
  * v0.8: Fixed a bug preventing of correct reporting of Armed state after Exit Delay.
+ * v0.9: Added a safety switch, when unexpected G000N000A000 crashed the daemon.
  */
 #define V_MAJOR 0
-#define V_MINOR 8
+#define V_MINOR 9
 
 #include <stdio.h>
 #include <string.h>

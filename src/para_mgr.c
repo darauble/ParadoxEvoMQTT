@@ -428,6 +428,22 @@ static void para_process_prt3_event(char *prt3_string, void* serial_sender, void
     int event_num = get_number_at_substring(prt3_string + 5, 3);
     int area_num = get_number_at_substring(prt3_string + 9, 3);
 
+    if (
+        (
+            (event_group >= G_ZONE_OK && event_group <= G_ZONE_FIRE_LOOP)
+            || (event_group >= G_ZONE_BYPASSED && event_group <= G_ZONE_FIRE_RESTORE)
+        )
+        && event_num < 1
+    ) {
+        log_error("PMGR-G: event/zone number is wrong: %d, %d, %d\n", event_group, event_num, area_num);
+        return;
+    }
+
+    if (area_num < 1 || area_num > MAX_AREAS) {
+        log_error("PMGR_G: ignoring area: %d, %d, %d\n", event_group, event_num, area_num);
+        return;
+    }
+
     switch (event_group) {
         case G_ZONE_OK:
             log_verbose("PMGR-G: zone %d on area %d OK/CLOSED\n", event_num, area_num);
