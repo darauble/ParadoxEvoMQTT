@@ -40,7 +40,7 @@
  * v0.9: Added a safety switch, when unexpected G000N000A000 crashed the daemon.
  */
 #define V_MAJOR 0
-#define V_MINOR 9
+#define V_MINOR 10
 
 #include <stdio.h>
 #include <string.h>

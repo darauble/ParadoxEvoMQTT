@@ -146,16 +146,20 @@ void *serial_thread(void *context)
                         // Cleanup and read again
                         memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
                         input_pos = 0;
-                    } else {
+                    } else if (buffer[i] != 0) {
                         serial_input[input_pos++] = buffer[i];
 
-                        if (input_pos == PARA_SERIAL_INPUT_LEN - 1) {
+                        if (input_pos >= PARA_SERIAL_INPUT_LEN - 1) {
                             // Something awry happened, input should not be that long!
-                            log_error("SERIAL: input buffer [%s] is too long!\n", serial_input);
+                            log_error("SERIAL: input buffer [%s] is too long! Read buffer: [%s]\n", serial_input, buffer);
 
                             memset(serial_input, 0, PARA_SERIAL_INPUT_LEN);
                             input_pos = 0;
+
+                            break; // Skip this too long buffer.
                         }
+                    } else {
+                        break; // The end of buffer is reached, partial read.
                     }
                 }
 
