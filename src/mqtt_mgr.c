@@ -1,5 +1,7 @@
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "config.h"
@@ -56,8 +58,9 @@ extern para_evo_config_t config;
 #define TOPIC_SIZE 256
 #define PAYLOAD_SIZE 256
 
-static char topic[TOPIC_SIZE];
-static char payload[PAYLOAD_SIZE];
+#define LWT_PERIOD_S 60     // How often "online" is re-sent
+#define CONNECT_RETRY_S 10  // Retry period if the initial connect fails
+
 static char lwt_topic[TOPIC_SIZE];
 static char url[TOPIC_SIZE];
 
@@ -80,21 +83,43 @@ static const char *mqz_states[] = {
 };
 
 static MQTTAsync client;
+static MQTTAsync_willOptions will_opts = MQTTAsync_willOptions_initializer;
+static MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
+
+/*
+ * Last known state of every area/zone. It is republished whenever the
+ * client (re)connects, so subscribers get the full picture after a broker
+ * restart, exactly as on a normal startup.
+ * Accessed from the MQTT manager thread and from Paho's callback thread.
+ */
+static pthread_mutex_t state_lock = PTHREAD_MUTEX_INITIALIZER;
+static para_area_t area_cache[MAX_AREAS];
+static int area_cached[MAX_AREAS];
+static para_zone_t zone_cache[MAX_ZONES];
+static int zone_cached[MAX_ZONES];
+
+// Set from Paho's thread when a connect attempt fails.
+static volatile int connect_failed = 0;
+static volatile int mqtt_disconnected = 0;
 
 static void *mqtt_mgr_thread(void *context);
 static void mqtt_start();
+static void mqtt_connect();
+static void mqtt_subscribe_all();
 static void mqtt_area_report(void *area_report_reader);
 static void mqtt_zone_report(void *zone_report_reader);
+static void mqtt_publish_area(const para_area_t *area);
+static void mqtt_publish_zone(const para_zone_t *zone);
 static void mqtt_send(const char *topic, const char *payload);
 static void mqtt_send_lwt();
 static void mqtt_stop();
 
 static void onConnect(void* context, MQTTAsync_successData* response);
 static void onConnectFailure(void* context, MQTTAsync_failureData* response);
+static void onConnected(void* context, char* cause);
+static void onConnectionLost(void* context, char* cause);
 static void onDisconnect(void* context, MQTTAsync_successData* response);
 static void onDisconnectFailure(void* context, MQTTAsync_failureData* response);
-// static void onSend(void* context, MQTTAsync_successData* response);
-// static void onSendFail(void* context, MQTTAsync_failureData* response);
 static void onSubscribe(void* context, MQTTAsync_successData* response);
 static void onSubscribeFailure(void* context, MQTTAsync_failureData* response);
 
@@ -117,8 +142,6 @@ static void *mqtt_mgr_thread(void *context) {
     void *area_report_reader = NULL;
     void *zone_report_reader = NULL;
     int rc;
-
-    mqtt_start();
 
     if ((rc = z_start_endpoint(context, &area_report_reader, ZMQ_PULL, EPT_MQTT_AREA_REPORT)) != 0) {
         log_error("MMGR: cannot start area report: %d, exiting.\n", rc);
@@ -145,6 +168,9 @@ static void *mqtt_mgr_thread(void *context) {
 
     zmq_setsockopt (kill_subscriber, ZMQ_SUBSCRIBE, "", 0);
 
+    // Connect only after mqtt_area_command exists: incoming commands use it.
+    mqtt_start();
+
     zmq_pollitem_t items[] = {
         { kill_subscriber, 0, ZMQ_POLLIN, 0 },
         { area_report_reader, 0, ZMQ_POLLIN, 0 },
@@ -153,8 +179,11 @@ static void *mqtt_mgr_thread(void *context) {
 
     log_info("MMGR: thread ready!\n");
 
+    time_t last_lwt = time(NULL);
+    time_t next_connect = 0;
+
     while (1) {
-        rc = zmq_poll(items, 3, 60000);
+        zmq_poll(items, 3, 1000);
 
         if (items[0].revents & ZMQ_POLLIN) {
             z_drop_message(kill_subscriber);
@@ -168,18 +197,34 @@ static void *mqtt_mgr_thread(void *context) {
             mqtt_zone_report(zone_report_reader);
         }
 
-        // log_debug("MMGR: POLLED: %d\n", rc);
+        time_t now = time(NULL);
 
-        if (rc == 0) {
-            // Timeout every 60 s, send LWT
-            log_debug("MMGR: poll timeout, send lwt\n");
+        if (now - last_lwt >= LWT_PERIOD_S) {
+            log_debug("MMGR: periodic online status\n");
             mqtt_send_lwt();
+            last_lwt = now;
+        }
+
+        // Paho's automaticReconnect only applies to a connection that once
+        // succeeded. If a connect attempt itself fails (e.g. the broker is
+        // not up yet at boot), retry from here.
+        if (connect_failed && !MQTTAsync_isConnected(client)) {
+            if (next_connect == 0) {
+                next_connect = now + CONNECT_RETRY_S;
+            } else if (now >= next_connect) {
+                log_info("MMGR: retrying connection to MQTT server...\n");
+                connect_failed = 0;
+                next_connect = 0;
+                mqtt_connect();
+            }
+        } else {
+            next_connect = 0;
         }
     }
 
-EXIT_MQTT_THREAD:
     mqtt_stop();
 
+EXIT_MQTT_THREAD:
     if (kill_subscriber) {
         zmq_close(kill_subscriber);
     }
@@ -204,17 +249,23 @@ EXIT_MQTT_THREAD:
 static int mqtt_area_control(void *context, char *topicName, int topicLen, MQTTAsync_message *message)
 {
     char topic[TOPIC_SIZE] = "";
+    char msg_payload[PAYLOAD_SIZE] = "";
+
+    // Paho does not guarantee a NUL-terminated payload.
+    int plen = message->payloadlen < PAYLOAD_SIZE - 1 ? message->payloadlen : PAYLOAD_SIZE - 1;
+    memcpy(msg_payload, message->payload, plen);
+    msg_payload[plen] = 0;
 
     log_debug("MGMR: topic %s arrived\n", topicName);
-    log_debug("%.*s\n", (int)message->payloadlen, (char*)message->payload);
+    log_debug("%s\n", msg_payload);
 
     snprintf(topic, TOPIC_SIZE, AREA_TOPIC_PREFIX, config.mqtt_topic);
 
     log_debug("MMGR: compare topic %s\n", topic);
-    log_debug("MMGR: postfix: %s\n", (topicName + strlen(topic) + 1));
 
     if (
-        strncmp(topicName, topic, strlen(topic)) == 0 
+        strncmp(topicName, topic, strlen(topic)) == 0
+        && strlen(topicName) > strlen(topic)
         && strcmp(topicName + strlen(topic) + 1, AREA_CONTROL_SET) == 0
     ) {
         int area_num = topicName[strlen(topic)] - 48;
@@ -222,11 +273,11 @@ static int mqtt_area_control(void *context, char *topicName, int topicLen, MQTTA
 
         para_arm_cmd_t cmd = { .type = CMD_AREA_CONTROL, .num = area_num, .command = -1 };
 
-        if (strcmp((char*)message->payload, HA_ARM_AWAY) == 0) {
+        if (strcmp(msg_payload, HA_ARM_AWAY) == 0) {
             cmd.command = AC_ARM_AWAY;
-        } else if (strcmp((char*)message->payload, HA_ARM_HOME) == 0) {
+        } else if (strcmp(msg_payload, HA_ARM_HOME) == 0) {
             cmd.command = AC_ARM_HOME;
-        } else if (strcmp((char*)message->payload, HA_DISARM) == 0) {
+        } else if (strcmp(msg_payload, HA_DISARM) == 0) {
             cmd.command = AC_DISARM;
         }
 
@@ -242,12 +293,12 @@ static int mqtt_area_control(void *context, char *topicName, int topicLen, MQTTA
         snprintf(topic, TOPIC_SIZE, UTILITY_KEY_TOPIC, config.mqtt_topic);
 
         if (strcmp(topicName, topic) == 0) {
-            log_info("MMGR: received Utility Key %s\n", (char*)message->payload);
-            int key_num = strtol((char*)message->payload, NULL, 10);
+            log_info("MMGR: received Utility Key %s\n", msg_payload);
+            int key_num = strtol(msg_payload, NULL, 10);
 
             para_arm_cmd_t cmd = { .type = CMD_UTILITY_KEY, .num = key_num, .command = 0 };
             zmq_msg_t zmessage;
-            
+
             zmq_msg_init_size (&zmessage, sizeof(para_arm_cmd_t));
             memcpy(zmq_msg_data(&zmessage), &cmd, sizeof(para_arm_cmd_t));
             zmq_msg_send (&zmessage, mqtt_area_command, 0);
@@ -269,16 +320,29 @@ static void mqtt_area_report(void *area_report_reader)
         return;
     }
 
-    // Note: Area control topic subscriptions are now handled in onConnect()
-    // to ensure they are re-established after reconnection
+    if (area->num >= 1 && area->num <= MAX_AREAS) {
+        pthread_mutex_lock(&state_lock);
+        area_cache[area->num - 1] = *area;
+        area_cached[area->num - 1] = 1;
+        mqtt_publish_area(area);
+        pthread_mutex_unlock(&state_lock);
+    } else {
+        log_error("MMGR: area report for invalid area %d\n", area->num);
+    }
 
-    const char *area_state = mqp_states[area->mqtt_state];
+    free(area);
+}
+
+static void mqtt_publish_area(const para_area_t *area)
+{
+    char topic[TOPIC_SIZE];
+    char payload[PAYLOAD_SIZE];
 
     snprintf(topic, TOPIC_SIZE, MAIN_AREA_TOPIC, config.mqtt_topic, area->num);
-    mqtt_send(topic, area_state);
+    mqtt_send(topic, mqp_states[area->mqtt_state]);
 
     snprintf(topic, TOPIC_SIZE, AREA_STATE_TOPIC, config.mqtt_topic, area->num);
-    snprintf(payload, PAYLOAD_SIZE, AREA_STATE_JSON, 
+    snprintf(payload, PAYLOAD_SIZE, AREA_STATE_JSON,
         area->num,
         area->name,
         area->status,
@@ -290,8 +354,6 @@ static void mqtt_area_report(void *area_report_reader)
         area->strobe
     );
     mqtt_send(topic, payload);
-
-    free(area);
 }
 
 static void mqtt_zone_report(void *zone_report_reader)
@@ -303,9 +365,26 @@ static void mqtt_zone_report(void *zone_report_reader)
         return;
     }
 
-    const char *zone_state = mqz_states[zone->mqtt_state];
+    if (zone->num >= 1 && zone->num <= MAX_ZONES) {
+        pthread_mutex_lock(&state_lock);
+        zone_cache[zone->num - 1] = *zone;
+        zone_cached[zone->num - 1] = 1;
+        mqtt_publish_zone(zone);
+        pthread_mutex_unlock(&state_lock);
+    } else {
+        log_error("MMGR: zone report for invalid zone %d\n", zone->num);
+    }
+
+    free(zone);
+}
+
+static void mqtt_publish_zone(const para_zone_t *zone)
+{
+    char topic[TOPIC_SIZE];
+    char payload[PAYLOAD_SIZE];
+
     snprintf(topic, TOPIC_SIZE, ZONE_STATUS_TOPIC, config.mqtt_topic, zone->area, zone->num);
-    mqtt_send(topic, zone_state);
+    mqtt_send(topic, mqz_states[zone->mqtt_state]);
 
     const char *alarm_state = zone->alarm == RS_ZONE_IN_ALARM ? mqz_states[MQZ_ON] : mqz_states[MQZ_OFF];
     snprintf(topic, TOPIC_SIZE, ZONE_ALARM_TOPIC, config.mqtt_topic, zone->area, zone->num);
@@ -323,10 +402,7 @@ static void mqtt_zone_report(void *zone_report_reader)
         zone->battery,
         zone->bypassed
     );
-    // log_debug("MMGR: zone status: %s\n", payload);
     mqtt_send(topic, payload);
-
-    free(zone);
 }
 
 static void mqtt_start()
@@ -337,13 +413,18 @@ static void mqtt_start()
 
     int rc;
 
-    if ((rc = MQTTAsync_setCallbacks(client, client, NULL, mqtt_area_control, NULL)) != MQTTASYNC_SUCCESS)
+    if ((rc = MQTTAsync_setCallbacks(client, client, onConnectionLost, mqtt_area_control, NULL)) != MQTTASYNC_SUCCESS)
     {
         log_error("Failed to set callbacks, return code %d\n", rc);
-    }//*/
+    }
 
-    MQTTAsync_willOptions will_opts = MQTTAsync_willOptions_initializer;
-    MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
+    // The connect options' onSuccess is called only for an explicit
+    // MQTTAsync_connect(). Automatic reconnects report only through this
+    // callback, so subscribing and publishing state must be done here.
+    if ((rc = MQTTAsync_setConnected(client, client, onConnected)) != MQTTASYNC_SUCCESS)
+    {
+        log_error("Failed to set connected callback, return code %d\n", rc);
+    }
 
     snprintf(lwt_topic, TOPIC_SIZE, LWT_TOPIC, config.mqtt_topic);
 
@@ -358,17 +439,24 @@ static void mqtt_start()
 
     conn_opts.username = config.mqtt_login;
     conn_opts.password = config.mqtt_password;
-    
+
     conn_opts.will = &will_opts;
     will_opts.topicName = lwt_topic;
     will_opts.message = DAEMON_OFFLINE;
     will_opts.retained = config.mqtt_retain;
-    
 
-    MQTTAsync_connect(client, &conn_opts);
+    mqtt_connect();
 }
 
-static int mqtt_disconnected = 0;
+static void mqtt_connect()
+{
+    int rc = MQTTAsync_connect(client, &conn_opts);
+
+    if (rc != MQTTASYNC_SUCCESS) {
+        log_error("MMGR: cannot start connecting to MQTT server: %d\n", rc);
+        connect_failed = 1;
+    }
+}
 
 static void mqtt_stop()
 {
@@ -376,22 +464,25 @@ static void mqtt_stop()
     opts.onSuccess = onDisconnect;
     opts.onFailure = onDisconnectFailure;
     opts.context = client;
+    opts.timeout = 2000;
 
     int rc;
 
     if ((rc = MQTTAsync_disconnect(client, &opts)) == MQTTASYNC_SUCCESS) {
         log_info("MMGR: stopping MQTT client\n");
+
+        struct timespec tv = {
+            .tv_sec = 0,
+            .tv_nsec = 100000000,
+        };
+
+        // Wait for the callback, but not forever (max 5 s).
+        for (int i = 0; i < 50 && mqtt_disconnected == 0; i++) {
+            nanosleep(&tv, NULL);
+        }
     } else {
+        // E.g. not connected: no callback will come, so don't wait for one.
         log_error("MMGR: error stopping MQTT client: %d\n", rc);
-    }
-
-    struct timespec tv = {
-        .tv_sec = 0,
-        .tv_nsec = 100000000,
-    };
-
-    while (mqtt_disconnected == 0) {
-        nanosleep(&tv, NULL);
     }
 
     MQTTAsync_destroy(&client);
@@ -399,10 +490,59 @@ static void mqtt_stop()
 
 static void onConnect(void* context, MQTTAsync_successData* response)
 {
-    log_info("MMGR: Connected to MQTT server.\n");
-    mqtt_send_lwt();
+    log_info("MMGR: connect request succeeded.\n");
+}
 
-    // Subscribe to utility key topic after successful connection
+static void onConnectFailure(void* context, MQTTAsync_failureData* response)
+{
+    log_error("MMGR: Failed to connect to MQTT server: [%d] - %s.\n",
+        response ? response->code : 0,
+        (response && response->message) ? response->message : "");
+    connect_failed = 1;
+}
+
+/*
+ * Called on every successful connection: the first one and every automatic
+ * reconnection. With cleansession the broker has forgotten our
+ * subscriptions (and a restarted broker may have lost retained messages),
+ * so do everything as on a normal startup.
+ */
+static void onConnected(void* context, char* cause)
+{
+    log_info("MMGR: Connected to MQTT server (%s).\n", cause ? cause : "-");
+    connect_failed = 0;
+
+    mqtt_send_lwt();
+    mqtt_subscribe_all();
+
+    // Republish the last known state of all areas and zones.
+    pthread_mutex_lock(&state_lock);
+
+    for (int i = 0; i < MAX_AREAS; i++) {
+        if (area_cached[i]) {
+            mqtt_publish_area(&area_cache[i]);
+        }
+    }
+
+    for (int i = 0; i < MAX_ZONES; i++) {
+        if (zone_cached[i]) {
+            mqtt_publish_zone(&zone_cache[i]);
+        }
+    }
+
+    pthread_mutex_unlock(&state_lock);
+}
+
+static void onConnectionLost(void* context, char* cause)
+{
+    log_error("MMGR: connection to MQTT server lost (%s), will reconnect.\n", cause ? cause : "unknown cause");
+}
+
+static void mqtt_subscribe_all()
+{
+    char topic[TOPIC_SIZE];
+    int rc;
+
     snprintf(topic, TOPIC_SIZE, UTILITY_KEY_TOPIC, config.mqtt_topic);
 
     MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
@@ -410,16 +550,12 @@ static void onConnect(void* context, MQTTAsync_successData* response)
     opts.onFailure = onSubscribeFailure;
     opts.context = client;
 
-    int rc = MQTTAsync_subscribe(client, topic, 1, &opts);
-
-    if (rc == MQTTASYNC_SUCCESS) {
-        log_info("MMGR: Subscribed to utility key topic after connection.\n");
+    if ((rc = MQTTAsync_subscribe(client, topic, 1, &opts)) == MQTTASYNC_SUCCESS) {
+        log_info("MMGR: subscribing to %s\n", topic);
     } else {
-        log_error("MMGR: Failed to subscribe to utility key topic: %d\n", rc);
+        log_error("MMGR: failed to subscribe to %s: %d\n", topic, rc);
     }
 
-    // Subscribe to all configured area control topics on every connection
-    // This ensures subscriptions are re-established after reconnection
     for (int i = 1; i <= MAX_AREAS; i++) {
         if (para_mgr_is_area_configured(i)) {
             snprintf(topic, TOPIC_SIZE, AREA_CONTROL_TOPIC, config.mqtt_topic, i);
@@ -429,20 +565,13 @@ static void onConnect(void* context, MQTTAsync_successData* response)
             area_opts.onFailure = onSubscribeFailure;
             area_opts.context = client;
 
-            rc = MQTTAsync_subscribe(client, topic, 1, &area_opts);
-
-            if (rc == MQTTASYNC_SUCCESS) {
-                log_info("MMGR: Subscribed to area %d control topic after connection.\n", i);
+            if ((rc = MQTTAsync_subscribe(client, topic, 1, &area_opts)) == MQTTASYNC_SUCCESS) {
+                log_info("MMGR: subscribing to %s\n", topic);
             } else {
-                log_error("MMGR: Failed to subscribe to area %d control topic: %d\n", i, rc);
+                log_error("MMGR: failed to subscribe to %s: %d\n", topic, rc);
             }
         }
     }
-}
-
-static void onConnectFailure(void* context, MQTTAsync_failureData* response)
-{
-    log_error("MMGR: Failed to connect to MQTT server: [%d] - %s.\n", response->code, response->message);
 }
 
 static void onDisconnect(void* context, MQTTAsync_successData* response)
@@ -453,27 +582,21 @@ static void onDisconnect(void* context, MQTTAsync_successData* response)
 
 static void onDisconnectFailure(void* context, MQTTAsync_failureData* response) {
     mqtt_disconnected = 1;
-    log_error("MMGR: MQTT failed to disconnect: [%d] - %s\n", response->code, response->message);
+    log_error("MMGR: MQTT failed to disconnect: [%d] - %s\n",
+        response ? response->code : 0,
+        (response && response->message) ? response->message : "");
 }
-
-// static void onSend(void* context, MQTTAsync_successData* response)
-// {
-    
-// }
-
-// static void onSendFail(void* context, MQTTAsync_failureData* response)
-// {
-//     log_error("MMGR: Message sending failed: [%d] - %s.\n", response->code, response->message);
-// }
 
 static void onSubscribe(void* context, MQTTAsync_successData* response)
 {
-        log_info("MMGR: MQTT subscription succeeded.\n");
+    log_info("MMGR: MQTT subscription succeeded.\n");
 }
- 
+
 static void onSubscribeFailure(void* context, MQTTAsync_failureData* response)
 {
-        log_error("MMGR: MQTT subscription failed: [%d] - %s\n", response->code, response->message);
+    log_error("MMGR: MQTT subscription failed: [%d] - %s\n",
+        response ? response->code : 0,
+        (response && response->message) ? response->message : "");
 }
 
 static void mqtt_send_lwt()

@@ -113,6 +113,9 @@ int main(int argc, char **argv)
         {0, 0, 0, 0}
     };
 
+    // Line-buffer stdout so log lines are not delayed/reordered when redirected to a file.
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     para_mgr_init();
 
     int opt_idx = 0;
